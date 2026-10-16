@@ -10,19 +10,24 @@ DISCORD_WEBHOOK_URL = os.environ.get("DISCORD_WEBHOOK_URL")
 RSS_URL = "https://rss.arxiv.org/rss/cs.AI"
 
 def summarize_text(client, title, summary, max_retries=6):
-    """Geminiを使ってニュースを要約する（503混雑時は指数バックオフで待機）"""
+    """Geminiを使ってニュースを中学生でもわかるレベルに噛み砕いて要約する"""
     prompt = f"""
-以下の最新AI関連ニュースを、日本の学生・研究者向けに日本語で要約してください。
+以下の最新AI研究について、専門用語を一切使わず、日常会話レベルのわかりやすい日本語で解説してください。
+工学的な数式や専門用語は、身近な例え話に置き換えてください。
 
-タイトル: {title}
-内容: {summary}
+論文タイトル: {title}
+元の内容: {summary}
 
 【出力フォーマット】
-・何が新しいのか（1行）
-・心理学や実社会、技術への影響・意義（1行）
-・重要ポイント（1行）
+💡 ざっくり言うと？
+（この研究が解決したい悩みやテーマを、身近な言葉で1行）
+
+🚀 ここが新しい・すごい！
+（今までできなかった何ができるようになったのかを1〜2行）
+
+🌱 私たちの生活や社会、心にどう影響する？
+（教育、仕事、人間関係、メンタルなど、人間の生活への影響を1行）
 """
-    # エラー時は 5秒, 10秒, 20秒, 40秒... と待機時間を増やして再試行
     wait_time = 5
     for attempt in range(max_retries):
         try:
@@ -33,9 +38,9 @@ def summarize_text(client, title, summary, max_retries=6):
             return response.text
         except Exception as e:
             if attempt < max_retries - 1:
-                print(f"一時的な混雑またはエラー ({e})。{wait_time}秒待機して再試行します (試行 {attempt + 1}/{max_retries})...")
+                print(f"一時的な混雑またはエラー ({e})。{wait_time}秒待機して再試行します...")
                 time.sleep(wait_time)
-                wait_time *= 2  # 待機時間を倍に伸ばす
+                wait_time *= 2
                 continue
             raise e
 
