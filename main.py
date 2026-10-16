@@ -26,7 +26,7 @@ def summarize_text(client, title, summary, max_retries=5):
     for attempt in range(max_retries):
         try:
             response = client.models.generate_content(
-                model="gemini-3.8-flash",
+                model="gemini-2.5-flash-latest",
                 contents=prompt,
             )
             return response.text
