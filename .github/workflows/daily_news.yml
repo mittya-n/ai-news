@@ -1,0 +1,31 @@
+name: Daily AI News Summarizer
+
+on:
+  schedule:
+    # 毎朝8時（JST）に実行（UTC基準で前日23:00）
+    - cron: '0 23 * * *'
+  # GitHubの画面から手動でテスト実行できるようにする設定
+  workflow_dispatch:
+
+jobs:
+  run-pipeline:
+    runs-on: ubuntu-latest
+    steps:
+      - name: リポジトリのコードをチェックアウト
+        uses: actions/checkout@v4
+
+      - name: Python環境のセットアップ
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: ライブラリのインストール
+        run: |
+          pip install google-genai feedparser requests
+
+      - name: パイプラインの実行
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: |
+          python main.py
