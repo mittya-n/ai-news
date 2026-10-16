@@ -1,17 +1,18 @@
 import os
+import time
 import feedparser
 import requests
 from google import genai
+from google.genai.errors import APIError
 
 # 環境変数からAPIキーとWebhook URLを取得
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 DISCORD_WEBHOOK_URL = os.environ.get("DISCORD_WEBHOOK_URL")
 
-# 監視したいRSSフィード（例：arXiv cs.AI や公式ブログなど）
 RSS_URL = "https://rss.arxiv.org/rss/cs.AI"
 
-def summarize_text(client, title, summary):
-    """Geminiを使ってニュースを3行で要約する"""
+def summarize_text(client, title, summary, max_retries=3):
+    """Geminiを使ってニュースを3行で要約する（混雑時は自動リトライ）"""
     prompt = f"""
 以下の最新AI関連ニュースを、日本の学生・研究者向けに日本語で要約してください。
 
@@ -23,11 +24,19 @@ def summarize_text(client, title, summary):
 ・心理学や実社会、技術への影響・意義（1行）
 ・重要ポイント（1行）
 """
-    response = client.models.generate_content(
-        model="gemini-3.8-flash",
-        contents=prompt,
-    )
-    return response.text
+    for attempt in range(max_retries):
+        try:
+            response = client.models.generate_content(
+                model="gemini-3.8-flash",
+                contents=prompt,
+            )
+            return response.text
+        except APIError as e:
+            if attempt < max_retries - 1:
+                # 混雑時（503など）は5秒待って再試行
+                time.sleep(5 * (attempt + 1))
+                continue
+            raise e
 
 def send_discord(content):
     """Discordのチャンネルに通知を送信"""
