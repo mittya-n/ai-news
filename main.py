@@ -4,14 +4,27 @@ import feedparser
 import requests
 from google import genai
 
-# 環境変数からAPIキーとWebhook URLを取得
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 DISCORD_WEBHOOK_URL = os.environ.get("DISCORD_WEBHOOK_URL")
 
 RSS_URL = "https://rss.arxiv.org/rss/cs.AI"
 
-def summarize_text(client, title, summary, max_retries=5):
-    """Geminiを使ってニュースを要約する（混雑時は長めに待機して自動リトライ）"""
+def get_available_flash_model(client):
+    """利用可能なモデル一覧から最適なFlashモデルを自動検出する"""
+    try:
+        available_models = [m.name for m in client.models.list()]
+        # flashを含み、generateContentに対応するモデルを探す
+        flash_models = [m for m in available_models if "flash" in m.lower()]
+        if flash_models:
+            chosen = flash_models[0]
+            print(f"自動選択されたモデル: {chosen}")
+            return chosen
+    except Exception as e:
+        print(f"モデル一覧取得失敗 ({e})。デフォルトを試行します。")
+    return "gemini-2.0-flash"
+
+def summarize_text(client, model_name, title, summary, max_retries=5):
+    """Geminiを使ってニュースを要約する（混雑時はリトライ）"""
     prompt = f"""
 以下の最新AI関連ニュースを、日本の学生・研究者向けに日本語で要約してください。
 
@@ -26,15 +39,14 @@ def summarize_text(client, title, summary, max_retries=5):
     for attempt in range(max_retries):
         try:
             response = client.models.generate_content(
-                model="gemini-2.5-flash-latest",
+                model=model_name,
                 contents=prompt,
             )
             return response.text
         except Exception as e:
             if attempt < max_retries - 1:
-                # 混雑時（503など）は待機時間を徐々に伸ばして再試行（10秒、20秒、30秒...）
                 wait_time = 10 * (attempt + 1)
-                print(f"エラー発生 ({e})。{wait_time}秒待機して再試行します (試行 {attempt + 1}/{max_retries})...")
+                print(f"一時エラー ({e})。{wait_time}秒待機して再試行します...")
                 time.sleep(wait_time)
                 continue
             raise e
@@ -47,9 +59,11 @@ def send_discord(content):
 
 def main():
     client = genai.Client(api_key=GEMINI_API_KEY)
-    feed = feedparser.parse(RSS_URL)
     
-    # 最新の3件だけを処理
+    # 確実に使えるモデルを自動で特定
+    model_name = get_available_flash_model(client)
+    
+    feed = feedparser.parse(RSS_URL)
     entries = feed.entries[:3]
     
     for entry in entries:
@@ -57,14 +71,10 @@ def main():
         link = entry.link
         description = entry.get("summary", "")
         
-        # 要約の生成
-        summary = summarize_text(client, title, description)
+        summary = summarize_text(client, model_name, title, description)
         
-        # Discord向けメッセージの成形
         message = f"**【最新AIニュース】**\n**{title}**\n{link}\n\n{summary}\n-------------------"
         send_discord(message)
-        
-        # 連続リクエストで負荷をかけないよう少し待機
         time.sleep(3)
 
 if __name__ == "__main__":
